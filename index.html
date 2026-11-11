@@ -172,7 +172,7 @@ function update(dt){time+=dt;if(mode!=='playing')return;elapsed+=dt;
 function render(){ctx.save();if(shake)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);drawBackground();
  // subtle sunlit dust drifting
  for(let i=0;i<12;i++){let x=(i*103+time*8)%W,y=180+(i*47)%230;ctx.globalAlpha=.12;ellipse(x,y,2,2,'#ffdfaa')}ctx.globalAlpha=1;
- drawBoss();drawHero();
+ drawHero();drawBoss();
  // bullets
  for(let p of projectiles){ellipse(p.x,p.y,8,5,'#fff0a0');ellipse(p.x,p.y,13,9,'#ffcf5c55')}
  for(let p of enemyShots){ellipse(p.x,p.y,p.r,p.r,p.type==='ember'?'#f27351':'#e9b55b');ellipse(p.x-2,p.y-2,3,3,'#fff0bd');ctx.globalAlpha=.28;ellipse(p.x,p.y,p.r+6,p.r+6,'#ffac5866');ctx.globalAlpha=1}
