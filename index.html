@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#17142b">
+<title>Oasis Outlaw — The Saffron Sultan</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Rye&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+:root{--ink:#17142b;--cream:#fff0c8;--gold:#ffbf59;--rust:#da6045;--teal:#67d3b1}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 7%,#39304e 0,#211d35 43%,#111222 100%);color:var(--cream);font-family:'Space Grotesk',sans-serif;display:flex;align-items:center;justify-content:center;padding:22px;overflow-x:hidden}
+.shell{width:min(1120px,100%);position:relative}.topline{display:flex;align-items:center;justify-content:space-between;margin:0 2px 12px;color:#c5b9ae;font:11px 'DM Mono',monospace;letter-spacing:.16em;text-transform:uppercase}.brand{color:#f4dfb8}.brand b{color:#ffc86b}.status{display:flex;align-items:center;gap:8px}.status i{width:7px;height:7px;border-radius:50%;background:#76d6a5;box-shadow:0 0 12px #76d6a5}
+.frame{position:relative;border:1px solid #827365;border-radius:10px;padding:8px;background:#282238;box-shadow:0 25px 90px #070711aa,0 0 0 4px #17142b,0 0 0 5px #5e5263;overflow:hidden}.frame:before{content:'';position:absolute;inset:13px;border:1px solid #ffe4a333;pointer-events:none;z-index:2;border-radius:3px}canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:4px;background:#37294a;touch-action:none}
+.bottom{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin:17px 3px 0}.caption{font-size:13px;color:#ddd0bd;line-height:1.55}.caption strong{font-family:Rye,serif;font-weight:400;color:#ffd27a;letter-spacing:.04em}.key-guide{display:flex;justify-content:flex-end;gap:15px;flex-wrap:wrap;font:10px 'DM Mono',monospace;color:#a89da9;text-transform:uppercase}.key{display:flex;align-items:center;gap:6px;white-space:nowrap}.key kbd{font:10px 'DM Mono',monospace;color:#fff0cf;border:1px solid #746779;background:#332d43;padding:4px 7px;border-radius:4px;box-shadow:0 2px 0 #161321}
+.touch-controls{display:none;position:absolute;inset:auto 16px 16px;justify-content:space-between;align-items:flex-end;pointer-events:none;z-index:4}.touch-group{display:flex;gap:9px;pointer-events:auto}.touch-btn{width:54px;height:54px;border-radius:50%;border:1px solid #ffdfa577;background:#211a34d9;color:#fff0cb;font-size:19px;box-shadow:0 3px 0 #100e1a;touch-action:none;user-select:none}.touch-btn:active,.touch-btn.down{background:#b95143;color:white;transform:translateY(2px);box-shadow:none}.touch-btn.small{width:46px;height:46px;font-size:14px}
+@media(max-width:700px){body{padding:10px;align-items:flex-start;padding-top:max(12px,env(safe-area-inset-top))}.topline{font-size:9px;margin-bottom:8px}.frame{padding:4px;border-radius:6px}.frame:before{inset:8px}.bottom{margin-top:11px;display:block}.caption{font-size:11px}.key-guide{display:none}.touch-controls{display:flex}.touch-btn{width:48px;height:48px}.touch-group{gap:7px}.touch-btn.small{width:42px;height:42px}}
+</style>
+</head>
+<body>
+<main class="shell">
+ <div class="topline"><div class="brand">✦ <b>OASIS OUTLAW</b> &nbsp;·&nbsp; A DESERT DUEL</div><div class="status"><i></i> ARCADE · ONE PLAYER</div></div>
+ <div class="frame">
+  <canvas id="game" width="960" height="540" aria-label="Oasis Outlaw boss battle game"></canvas>
+  <div class="touch-controls" aria-label="Touch controls">
+   <div class="touch-group"><button class="touch-btn" data-key="ArrowLeft" aria-label="Move left">◀</button><button class="touch-btn" data-key="ArrowRight" aria-label="Move right">▶</button></div>
+   <div class="touch-group"><button class="touch-btn small" data-key="Space" aria-label="Jump">JMP</button><button class="touch-btn small" data-key="KeyJ" aria-label="Shoot">✦</button><button class="touch-btn small" data-key="ShiftLeft" aria-label="Dash">↗</button></div>
+  </div>
+ </div>
+ <div class="bottom"><div class="caption"><strong>THE SAFFRON SULTAN</strong><br>One stubborn lizard. One very brave traveler. The oasis won't save itself.</div><div class="key-guide"><span class="key"><kbd>← →</kbd> Move</span><span class="key"><kbd>SPACE</kbd> Jump</span><span class="key"><kbd>J</kbd> Fire</span><span class="key"><kbd>SHIFT</kbd> Dash</span><span class="key"><kbd>ESC</kbd> Pause</span></div></div>
+</main>
+<script>
+(()=>{
+const c=document.querySelector('#game'),ctx=c.getContext('2d');
+const W=960,H=540, floor=443;
+let mode='title', last=0, time=0, shake=0, flash=0, kills=0, projectiles=[], enemyShots=[], particles=[], keys={}, audioCtx=null;
+const player={x:170,y:floor,vx:0,vy:0,w:36,h:62,ground:true,face:1,hp:3,inv:0,fire:0,dash:0,dashCd:0,anim:0};
+const boss={x:735,y:floor,hp:100,max:100,attack:0,phase:0,anim:0,blink:0,stun:0};
+let score=0, elapsed=0, pauseBefore='playing';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function sound(freq=440,dur=.07,type='square',vol=.025){try{audioCtx ||=new(window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur)}catch(e){}}
+function rr(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function ellipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fill()}
+function line(x1,y1,x2,y2,color,width=2){ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+function poly(points,color){ctx.fillStyle=color;ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();ctx.fill()}
+function text(s,x,y,size,color,font='Space Grotesk',align='left'){ctx.fillStyle=color;ctx.font=`${size}px '${font}'`;ctx.textAlign=align;ctx.fillText(s,x,y)}
+function drawBackground(){
+ const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#2d2545');g.addColorStop(.58,'#b56355');g.addColorStop(1,'#e6a66f');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ // stars and crescent
+ for(let i=0;i<53;i++){let x=(i*173+42)%W,y=(i*71+27)%250;ctx.globalAlpha=.35+Math.sin(time*1.5+i)*.18;ellipse(x,y,((i%3)*.35)+.7,((i%3)*.35)+.7,'#ffefc4')}ctx.globalAlpha=1;
+ ellipse(776,104,39,39,'#ffe6a9');ellipse(792,91,36,37,'#49324d');
+ // distant dunes
+ poly([[0,309],[95,271],[195,306],[310,260],[452,312],[590,269],[741,310],[854,266],[960,302],[960,455],[0,455]],'#704765');
+ poly([[0,348],[147,297],[286,340],[418,288],[565,343],[706,301],[858,346],[960,312],[960,455],[0,455]],'#965367');
+ // palace silhouette & minarets
+ ctx.fillStyle='#3c3048';ctx.fillRect(294,270,384,145);ctx.fillRect(316,250,42,165);ctx.fillRect(612,246,39,169);
+ for(let x of [327,631]){ellipse(x+10,250,21,26,'#3c3048');line(x+10,231,x+10,210,'#3c3048',5);ellipse(x+10,207,4,4,'#3c3048')}
+ // ornate central dome
+ ctx.fillStyle='#3c3048';ctx.beginPath();ctx.moveTo(407,270);ctx.bezierCurveTo(407,204,553,204,553,270);ctx.fill();ellipse(480,269,73,11,'#3c3048');
+ for(let x=345;x<640;x+=49){ctx.fillStyle='#d5a570';ctx.globalAlpha=.18;ctx.fillRect(x,290,13,39);ctx.fillRect(x+5,348,7,48);ctx.globalAlpha=1}
+ // giant arch frame left and right
+ ctx.fillStyle='#392b43';ctx.fillRect(0,188,82,267);ctx.beginPath();ctx.arc(41,188,41,Math.PI,0);ctx.fill();ctx.fillRect(880,188,80,267);ctx.beginPath();ctx.arc(920,188,40,Math.PI,0);ctx.fill();
+ // lanterns
+ for(let x of [111,849]){line(x,0,x,108,'#432f42',3);rr(x-13,105,26,42,5,'#493345');ellipse(x,105,8,7,'#493345');ellipse(x,124,5,11,'#ffca73');ctx.globalAlpha=.32;ellipse(x,125,17,22,'#ffb84e');ctx.globalAlpha=1}
+ // ground
+ ctx.fillStyle='#513749';ctx.fillRect(0,floor,W,H-floor);ctx.fillStyle='#cc8054';ctx.fillRect(0,floor,W,7);
+ for(let i=0;i<18;i++){let x=(i*67+((time*18)%67))%W;line(x,floor+31,x+22,floor+31,'#6f4650',2)}
+ // foreground scattered sand / motifs
+ for(let i=0;i<24;i++){let x=(i*91+21)%W,y=floor+45+(i*29)%80;ellipse(x,y,1.5,1,'#efb16e')}
+}
+function drawHero(){
+ const run=Math.sin(player.anim*12), x=player.x,y=player.y;ctx.save();ctx.translate(x,y);if(player.face<0)ctx.scale(-1,1);
+ // shadow
+ ellipse(0,-2,27,6,'#261e30aa');
+ let inv=player.inv>0&&Math.floor(time*15)%2===0;ctx.globalAlpha=inv?.45:1;
+ // legs / curled boots
+ line(-8,-25,-11,-7,'#244a51',8);line(9,-25,12+run*4,-7,'#244a51',8);rr(-22,-9,17,8,4,'#d75e42');rr(5+run*4,-9,18,8,4,'#d75e42');
+ // robe body
+ poly([[-15,-50],[13,-50],[18,-17],[0,-12],[-18,-18]],'#328a80');poly([[-5,-48],[3,-47],[10,-15],[0,-13]],'#f2bf6e');
+ line(-14,-42,-23,-29,'#c9804b',6);line(13,-43,22,-36,'#c9804b',6);
+ // pistol
+ rr(17,-41,19,7,2,'#633f3a');rr(30,-44,8,4,1,'#f1c16d');
+ // head
+ ellipse(0,-57,14,15,'#d99361');ellipse(5,-57,2,2,'#231d30');line(4,-51,9,-51,'#853e3c',1.4);
+ // scarf and turban
+ poly([[-15,-65],[-10,-75],[9,-76],[15,-67],[7,-62],[-9,-62]],'#f0c76f');line(-4,-73,8,-67,'#b55643',3);poly([[-11,-63],[-15,-57],[-9,-56]],'#4ec4a5');
+ // small plume
+ line(4,-76,12,-86,'#da684d',3);ellipse(13,-87,4,7,'#da684d');
+ ctx.globalAlpha=1;ctx.restore();
+}
+function drawBoss(){
+ const x=boss.x,y=boss.y;ctx.save();ctx.translate(x,y);let bop=Math.sin(boss.anim*3)*2;ctx.translate(0,bop);
+ // tail curls behind
+ ctx.strokeStyle='#4b9b61';ctx.lineWidth=18;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-26,-32);ctx.bezierCurveTo(-75,-25,-95,-52,-127,-39);ctx.bezierCurveTo(-148,-31,-139,-9,-123,-16);ctx.stroke();
+ // legs
+ line(-23,-33,-29,-7,'#397b50',15);line(18,-33,28,-7,'#397b50',15);rr(-43,-9,26,9,4,'#d69d45');rr(15,-9,30,9,4,'#d69d45');
+ // body plated
+ ellipse(-1,-51,43,35,'#478d56');ellipse(2,-55,31,24,'#65aa61');
+ for(let i=0;i<5;i++){poly([[-25+i*12,-76],[-18+i*12,-84],[-10+i*12,-75]],'#d39a43')}
+ // arms
+ line(-29,-66,-44,-43,'#478d56',13);line(30,-66,40,-47,'#478d56',13);
+ // head, broad snout
+ ellipse(1,-91,30,25,'#52995b');ellipse(26,-81,30,15,'#65a95e');
+ // head fin crest
+ poly([[-21,-105],[-28,-120],[-12,-112],[-4,-129],[4,-110],[16,-123],[18,-104]],'#d39d46');
+ // eye and brow
+ ellipse(7,-98,8,8,'#e7c56e');ellipse(10,-98,3,5,'#30263b');line(0,-108,16,-111,'#315e46',4);
+ // nostril, smile and teeth
+ ellipse(43,-84,2,2,'#35543c');line(18,-71,52,-73,'#31553f',2);for(let i=0;i<4;i++)poly([[25+i*7,-72],[28+i*7,-66],[31+i*7,-72]],'#fff0c6');
+ // turban / sultan sash
+ poly([[-23,-108],[-15,-123],[12,-124],[25,-110],[17,-104],[-13,-103]],'#eee0bd');line(-10,-119,8,-109,'#d05d45',5);ellipse(0,-113,4,4,'#e7b650');
+ // shoulder medallion
+ ellipse(-27,-65,8,8,'#e8b75b');ellipse(-27,-65,3,3,'#713c48');
+ // curved saber when attack
+ if(boss.phase===2&&boss.attack<.62){ctx.strokeStyle='#ffe2a1';ctx.lineWidth=5;ctx.beginPath();ctx.arc(48,-45,27,-1.7,.45);ctx.stroke();line(38,-64,51,-51,'#70423b',5)}
+ ctx.restore();
+ // ground shadow
+ ellipse(x,floor+2,57,8,'#251d30aa');
+}
+function drawHud(){
+ rr(20,18,244,72,8,'#211b32dd');rr(28,26,37,37,19,'#cf664a');text('✦',46,53,21,'#ffe0a2','Space Grotesk','center');text('NADIR',75,41,11,'#fff0c8','DM Mono');
+ for(let i=0;i<3;i++){text(i<player.hp?'♥':'♡',76+i*23,68,17,i<player.hp?'#ff785f':'#786777','Space Grotesk')}
+ rr(671,19,269,73,8,'#211b32dd');text('THE SAFFRON SULTAN',806,40,12,'#fff0c8','DM Mono','center');rr(689,52,232,15,7,'#553c4d');rr(689,52,232*(boss.hp/boss.max),15,7,boss.hp<30?'#ee6d4e':'#dfaa56');
+ for(let i=0;i<5;i++)line(689+i*58,54,689+i*58,65,'#30263a',1);
+ text('OASIS PALACE  ·  DAY 03',480,31,10,'#e9cda6','DM Mono','center');
+}
+function label(str,x,y,sz,col){ctx.save();ctx.translate(x,y);ctx.rotate(-.08);text(str,0,0,sz,col,'Rye','center');ctx.restore()}
+function drawOverlay(){
+ ctx.fillStyle='#171329b8';ctx.fillRect(0,0,W,H);
+ if(mode==='title'){
+  // decorative framing
+  line(320,130,640,130,'#eac270',1);ellipse(480,130,4,4,'#eac270');
+  text('THE OASIS IS IN',480,169,16,'#f3d9b2','DM Mono','center');label('A PICKLE.',480,224,45,'#ffd57f');
+  text('A hand-drawn desert showdown',480,258,17,'#fff0d6','Space Grotesk','center');
+  rr(365,299,230,51,7,'#cf664a');rr(365,299,230,51,7,'#cf664a');ctx.strokeStyle='#ffcf79';ctx.lineWidth=1;ctx.strokeRect(370,304,220,41);
+  text('▶  START THE DUEL',480,331,15,'#fff1d2','DM Mono','center');
+  text('PRESS ENTER OR CLICK TO BEGIN',480,378,10,'#e9cda6','DM Mono','center');
+  text('MOVE  ·  JUMP  ·  SHOOT  ·  SURVIVE',480,418,11,'#c6afab','DM Mono','center');
+ } else if(mode==='paused'){
+  label('TAKE A BREATHER',480,230,36,'#ffd57f');text('THE DESERT CAN WAIT.',480,272,15,'#fff0d6','DM Mono','center');rr(373,306,214,47,6,'#cf664a');text('▶  RESUME',480,336,14,'#fff1d2','DM Mono','center');text('PRESS ESC TO CONTINUE',480,382,10,'#e9cda6','DM Mono','center');
+ } else if(mode==='win'||mode==='lose'){
+  label(mode==='win'?'OASIS SAVED!':'BACK TO THE DUNES',480,221,mode==='win'?40:34,mode==='win'?'#ffd57f':'#ff9679');
+  text(mode==='win'?'The Sultan has been humbled. Tea is on the house.':'The Sultan keeps the oasis... for now.',480,264,16,'#fff0d6','Space Grotesk','center');
+  text(`DUEL TIME  ${formatTime(elapsed)}     SCORE  ${score}`,480,300,12,'#ebc98e','DM Mono','center');rr(386,328,188,48,6,'#cf664a');text('↻  PLAY AGAIN',480,358,14,'#fff1d2','DM Mono','center');text('PRESS ENTER TO TRY AGAIN',480,397,10,'#e9cda6','DM Mono','center');
+ }
+}
+function formatTime(s){let n=Math.floor(s);return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`}
+function start(){mode='playing';player.x=170;player.y=floor;player.vx=player.vy=0;player.hp=3;player.inv=0;player.fire=0;player.dash=0;player.dashCd=0;boss.x=735;boss.hp=100;boss.attack=0;boss.phase=0;boss.stun=0;projectiles=[];enemyShots=[];particles=[];score=0;elapsed=0;time=0;sound(530,.11,'triangle')}
+function hurt(){if(player.inv>0||mode!=='playing')return;player.hp--;player.inv=1.5;player.vx=player.x<boss.x?-230:230;player.vy=-250;shake=10;flash=.4;sound(110,.2,'sawtooth',.045);if(player.hp<=0){mode='lose';sound(85,.45,'triangle')}}
+function puff(x,y,color,n=8){for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-.5)*190,vy:(Math.random()-.8)*180,life:.45+Math.random()*.5,color,r:2+Math.random()*4})}
+function shoot(){if(player.fire>0)return;player.fire=.19;projectiles.push({x:player.x+player.face*23,y:player.y-41,vx:player.face*550,life:1.4});sound(580,.045,'square',.012)}
+function enemyFire(){const dx=player.x-boss.x,dir=Math.sign(dx)||-1;let speed=260+(100-boss.hp)*1.3;for(let i=-1;i<=1;i++)enemyShots.push({x:boss.x-8,y:boss.y-80,vx:dir*speed,vy:i*105+((player.y-boss.y)*.13),life:2.7,r:9,type:boss.phase===1?'ember':'orb'});sound(145,.15,'sawtooth',.018)}
+function update(dt){time+=dt;if(mode!=='playing')return;elapsed+=dt;
+ player.anim+=dt;player.fire=Math.max(0,player.fire-dt);player.inv=Math.max(0,player.inv-dt);player.dashCd=Math.max(0,player.dashCd-dt);
+ let left=keys.ArrowLeft||keys.KeyA,right=keys.ArrowRight||keys.KeyD;
+ if(player.dash>0){player.dash-=dt;player.vx=player.face*570}else{player.vx=(right-left)*230;if(player.vx)player.face=Math.sign(player.vx)}
+ if((keys.Space||keys.ArrowUp||keys.KeyW)&&player.ground){player.vy=-465;player.ground=false;sound(250,.06,'triangle',.015)}
+ if((keys.ShiftLeft||keys.ShiftRight||keys.KeyK)&&player.dashCd<=0){player.dash=.18;player.dashCd=.8;player.inv=Math.max(player.inv,.35);player.vy*=.2;sound(320,.08,'sawtooth',.018)}
+ if(keys.KeyJ||keys.KeyX||keys.ControlLeft)shoot();
+ player.x+=player.vx*dt;player.vy+=1150*dt;player.y+=player.vy*dt;
+ if(player.y>=floor){player.y=floor;player.vy=0;player.ground=true}player.x=clamp(player.x,40,920);
+ // boss phases: shoot volley, swoop, then repeat; faster when hurt
+ boss.anim+=dt;boss.stun=Math.max(0,boss.stun-dt);boss.blink=Math.max(0,boss.blink-dt);
+ const rage=boss.hp<48?1.35:1;boss.attack+=dt*rage;
+ if(boss.attack>2.65){boss.attack=0;boss.phase=(boss.phase+1)%3;if(boss.phase===0||boss.phase===1)enemyFire();else{boss.x=clamp(player.x+ (player.x<boss.x?105:-105),540,875);shake=5;puff(boss.x,floor-10,'#dc9c53',14);sound(90,.2,'sawtooth',.025);if(Math.abs(player.x-boss.x)<102&&player.y>floor-90)hurt()}}
+ // soft positioning, animated idle
+ if(boss.phase!==2){boss.x+=Math.sin(time*1.1)*12*dt;boss.x=clamp(boss.x,600,845)}
+ // player shots
+ for(let p of projectiles){p.x+=p.vx*dt;p.life-=dt;if(Math.abs(p.x-boss.x)<51&&Math.abs(p.y-(boss.y-76))<67){p.life=0;boss.hp-=3.4;boss.stun=.07;score+=10;puff(p.x,p.y,'#ffdb85',4);sound(330,.035,'triangle',.01);if(boss.hp<=0){boss.hp=0;mode='win';sound(650,.3,'triangle',.045);puff(boss.x,boss.y-60,'#ffcf70',34)}}}projectiles=projectiles.filter(p=>p.life>0&&p.x>0&&p.x<W);
+ // hostile magic
+ for(let p of enemyShots){p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;p.vy+=45*dt;if(Math.abs(p.x-player.x)<28&&Math.abs(p.y-(player.y-35))<32){p.life=0;hurt();puff(p.x,p.y,'#ec925c',9)}}enemyShots=enemyShots.filter(p=>p.life>0&&p.x>-30&&p.x<W+30&&p.y<H);
+ for(let p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=240*dt;p.life-=dt}particles=particles.filter(p=>p.life>0);
+ shake=Math.max(0,shake-dt*28);flash=Math.max(0,flash-dt);
+}
+function render(){ctx.save();if(shake)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);drawBackground();
+ // subtle sunlit dust drifting
+ for(let i=0;i<12;i++){let x=(i*103+time*8)%W,y=180+(i*47)%230;ctx.globalAlpha=.12;ellipse(x,y,2,2,'#ffdfaa')}ctx.globalAlpha=1;
+ drawBoss();drawHero();
+ // bullets
+ for(let p of projectiles){ellipse(p.x,p.y,8,5,'#fff0a0');ellipse(p.x,p.y,13,9,'#ffcf5c55')}
+ for(let p of enemyShots){ellipse(p.x,p.y,p.r,p.r,p.type==='ember'?'#f27351':'#e9b55b');ellipse(p.x-2,p.y-2,3,3,'#fff0bd');ctx.globalAlpha=.28;ellipse(p.x,p.y,p.r+6,p.r+6,'#ffac5866');ctx.globalAlpha=1}
+ for(let p of particles){ctx.globalAlpha=clamp(p.life*1.7,0,1);ellipse(p.x,p.y,p.r,p.r,p.color)}ctx.globalAlpha=1;
+ drawHud();if(mode!=='playing')drawOverlay();if(flash){ctx.globalAlpha=flash*.45;ctx.fillStyle='#ff4437';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1}
+ ctx.restore();requestAnimationFrame(frame)}
+function frame(now){let dt=Math.min(.033,(now-last)/1000||0);last=now;update(dt);render()}
+function canvasPoint(e){const r=c.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+c.addEventListener('pointerdown',e=>{c.setPointerCapture?.(e.pointerId);if(mode==='title'||mode==='win'||mode==='lose'){start();return}if(mode==='paused'){mode='playing';return}const p=canvasPoint(e);if(p.x<480)keys.ArrowLeft=true;else keys.KeyJ=true});
+c.addEventListener('pointerup',()=>{keys.ArrowLeft=false;keys.KeyJ=false});
+window.addEventListener('keydown',e=>{if(['Space','ArrowLeft','ArrowRight','ArrowUp'].includes(e.code))e.preventDefault();keys[e.code]=true;if(e.code==='Escape'){if(mode==='playing')mode='paused';else if(mode==='paused')mode='playing'}if(e.code==='Enter'){if(mode==='title'||mode==='win'||mode==='lose')start();else if(mode==='paused')mode='playing'}});
+window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{keys={};if(mode==='playing')mode='paused'});
+document.querySelectorAll('.touch-btn').forEach(b=>{const code=b.dataset.key;const on=e=>{e.preventDefault();keys[code]=true;b.classList.add('down')},off=e=>{e.preventDefault();keys[code]=false;b.classList.remove('down')};b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off)});
+requestAnimationFrame(frame);
+})();
+</script></body></html>
